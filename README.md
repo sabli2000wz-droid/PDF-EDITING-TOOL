@@ -6,7 +6,7 @@ A single-file, in-browser tool for drawing on PDFs, replacing text, redacting se
 
 ### Markup
 - **Shapes:** rectangle, square, ellipse, line, arrow and freehand pen
-- **Styling:** 8 preset colors plus a custom picker, adjustable stroke width, and three fill modes (none, translucent, solid)
+- **Styling:** 8 preset colors plus a rainbow custom-color picker, adjustable stroke width, and three fill modes (none, translucent, solid)
 - **Highlighter:** use the pen with a translucent fill
 - **Editing:** select, move, resize (bottom-right handle) and delete any markup; full undo and redo
 
@@ -16,27 +16,28 @@ A single-file, in-browser tool for drawing on PDFs, replacing text, redacting se
 - Leave the replacement empty to erase the original text
 
 ### Redaction
-- **Redact tool:** draws solid black boxes
-- **Remove covered text:** flattens marked pages into images so covered content is permanently removed and cannot be copied or searched
-- This option is forced on whenever the document contains redactions or replaced text, and you are warned if you have solid boxes but haven't enabled it
+- **Redact tool:** draws boxes that permanently remove whatever is underneath when you save or split
+- **Any color:** black by default; pick white for a clean cover-up, or any other color
+- **Easy to tell apart:** redaction boxes show a dashed inner outline while you edit (not included in the saved PDF), so they're never confused with ordinary solid shapes
+- **Safety prompt:** if you've drawn solid shapes that aren't redactions, you're offered to convert them before saving, so nothing you meant to hide stays copyable
 
 ### Split
 - Five methods: pick cut points (click between pages), every page, every N pages, custom ranges, and extract pages
 - Real page thumbnails with color-coded groups and markup indicators
 - Download files individually or as a single ZIP
-- Splits use the same processing as Save, so removed text never reappears in split files
+- Splits use the same processing as Save, so removed text never reappears in split files. Splitting the original pages is disabled while the document has redactions or replaced text
 
 ### Convenience
+- **Settings sidebar:** tool settings (color, stroke, fill, font, size) appear in a left sidebar and only show what's relevant to the current tool or selection. On phones it becomes a floating panel at the bottom
 - **Autosave:** markup is saved in your browser and can be restored the next time you open the same PDF
-- **Context-aware toolbar:** shows only the settings relevant to the current tool or selection
-- **Light and dark mode:** follows your system setting
+- **Light and dark mode:** a soft, low-saturation blue “jelly” look that follows your system setting
 
 ## Getting started
 
 1. Open `pdf-markup.html` in a modern browser (Chrome, Edge, Firefox or Safari).
 2. Drag a PDF onto the page, or click **Open PDF**.
-3. Pick a tool and draw on the page.
-4. Click **Save PDF** to download the marked-up copy (saved as `<name>-marked.pdf`).
+3. Pick a tool from the toolbar, adjust it in the left sidebar, and draw on the page.
+4. Click **Save PDF** to download the marked-up copy (saved as `<name>-marked.pdf`), or **Split** to break it into several files.
 
 An internet connection is needed the first time so the page can load its libraries and fonts from CDNs.
 
@@ -60,18 +61,19 @@ An internet connection is needed the first time so the page can load its librari
 | Ctrl/⌘ + Shift + Z, Ctrl/⌘ + Y | Redo |
 | Delete / Backspace | Delete the selected markup |
 | Enter | Finish editing text (Shift + Enter for a new line) |
-| Esc | Cancel text editing or clear the selection |
+| Esc | Cancel text editing, clear the selection, or close the split panel |
 
 Double-click text with the Select tool to edit it.
 
 ## How saving works
 
-There are two ways the tool writes your markup into the PDF:
+Each page is handled according to what's on it:
 
-- **Overlay (default):** markup is added as an image layer on top of each marked page. The original text stays selectable and searchable — including any text under your shapes.
-- **Flatten (Remove covered text):** each marked page is rebuilt as a single 200 dpi image with your markup burned in. Covered text is truly gone. Pages without markup are copied unchanged. The output is assembled into a new document, so no leftover data from the original pages remains in the file.
+- **Pages with redactions or replaced text are flattened.** The page is rebuilt as a single 200 dpi image with your markup burned in, so the covered text is truly gone and can't be copied or searched.
+- **Pages with other markup get an overlay.** Your drawings are added as an image layer on top, and the page's original text stays selectable and searchable.
+- **Pages without markup are copied unchanged.**
 
-Flattened pages are no longer selectable or searchable, and the new file does not keep bookmarks, outlines or form fields from the original.
+When any page is flattened, the output is assembled into a brand-new document, so no leftover data from the original pages remains in the file. In that case the new file doesn't keep bookmarks, outlines or form fields from the original.
 
 ## Fonts
 
@@ -82,11 +84,11 @@ Flattened pages are no longer selectable or searchable, and the new file does no
 | Modern | Roboto, Open Sans, Lato, Montserrat, Noto Sans Mono |
 | Display & handwriting | Merriweather, Playfair Display, Caveat |
 
-The Office look-alikes are metric-compatible open fonts: each character has the same width as the original, so replaced text lines up with the surrounding layout. When a Latin font is selected, Chinese characters fall back to a matching Chinese font.
+The Office look-alikes are metric-compatible open fonts: each character has the same width as the original, so replaced text lines up with the surrounding layout. When a Latin font is selected, Chinese characters fall back to a matching Chinese font. The interface itself uses Nunito.
 
 ## Limitations
 
-- **Scanned PDFs** have no text layer, so Replace can't detect text. Use a Rectangle with a solid fill plus the Text tool instead.
+- **Scanned PDFs** have no text layer, so Replace can't detect text. Use the Redact tool (white works well) plus the Text tool instead.
 - **Replace** covers text with a single background color, so it works best on plain backgrounds. Gradients, photos and watermarks will show the patch. Longer replacement text does not reflow surrounding content.
 - **Font matching** is approximate. Custom or brand fonts are mapped to the closest available style.
 - **Password-protected PDFs** cannot be opened.
