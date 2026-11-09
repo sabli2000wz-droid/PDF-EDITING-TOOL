@@ -359,6 +359,31 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(111,149,192,
   .tool[aria-pressed="true"] { animation: none; }
   .btn:hover:not(:disabled), .btn:active:not(:disabled), .tool:active, .swatch:hover, .swatch[aria-pressed="true"] { transform: none; }
 }
+/* ================= settings sidebar ================= */
+.work { flex: 1; min-height: 0; display: flex; position: relative; }
+.work #viewer { flex: 1; min-width: 0; }
+.props { width: 236px; flex-shrink: 0; overflow-y: auto; background: var(--bar); -webkit-backdrop-filter: blur(16px) saturate(1.2); backdrop-filter: blur(16px) saturate(1.2); border-right: 1px solid var(--bar-line); padding: 4px 0 16px; }
+.props[hidden] { display: none; }
+.props .grp { display: flex; flex-direction: column; align-items: stretch; gap: 10px; margin: 0; padding: 16px 18px; border-left: 0; border-bottom: 1px solid var(--bar-line); }
+.props .grp[hidden], #grpColor[hidden] { display: none; }
+.props .grp[data-title]::before { content: attr(data-title); font-size: 11.5px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-soft); }
+#grpColor { display: grid; grid-template-columns: repeat(5, 26px); justify-content: space-between; row-gap: 12px; }
+#grpColor::before { grid-column: 1 / -1; }
+#grpColor .ctl { display: block; }
+.props .ctl { display: flex; flex-direction: column; align-items: stretch; gap: 8px; font-size: 11.5px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-soft); }
+.props .ctl select { width: 100%; text-transform: none; letter-spacing: 0; font-size: 13.5px; }
+.props .ctl input[type=range] { width: 100%; margin: 6px 0; }
+.props #boldIn { align-self: flex-start; }
+.props .hint { white-space: normal; line-height: 1.55; font-size: 13px; }
+#grpDel .btn { width: 100%; justify-content: center; }
+@media (max-width: 760px) {
+  .props { position: fixed; z-index: 15; left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); width: auto; max-height: 42vh;
+    border: 1px solid var(--bar-line); border-radius: 22px; box-shadow: 0 14px 40px rgba(40,60,90,.22); background: var(--panel); padding: 0; }
+  .props.only-hint { display: none; }
+  .props .grp { padding: 12px 16px; }
+  #grpColor { grid-template-columns: repeat(9, 26px); }
+  #pages { padding-bottom: 45vh; }
+}
 </style>
 </head>
 <body>
@@ -383,7 +408,6 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(111,149,192,
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.1 15.9"/><path d="M14.5 14.5 20 20"/><path d="M8.1 8.1 12 12"/></svg>
     <span class="lbl">Split</span>
   </button>
-  <label class="ctl" id="flatLbl" title="Turns each marked page into a single image, so anything you covered is permanently removed and can’t be copied or searched. Pages without markup stay unchanged."><input type="checkbox" id="flatIn"> <span>Remove covered text</span></label>
   <button class="btn primary" id="exportBtn" type="button" disabled>
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
     <span class="lbl">Save PDF</span>
@@ -391,6 +415,8 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(111,149,192,
 </div>
 <div class="bar" id="toolbar" role="toolbar" aria-label="Tools"></div>
 
+<div class="work">
+<aside class="props" id="props" aria-label="Tool settings" hidden></aside>
 <div id="viewer">
   <div id="pages"></div>
   <div class="empty" id="empty">
@@ -406,6 +432,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(111,149,192,
       <button class="btn primary" id="openBtn2" type="button">Choose a PDF</button>
     </div>
   </div>
+</div>
 </div>
 <input type="file" id="fileIn" accept="application/pdf,.pdf" hidden>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -535,7 +562,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(111,149,192,
   const S = {
     pdf: null, bytes: null, name: "", pages: [], annos: [],
     tool: "rect", color: COLORS[0], width: 3, fill: false, font: "sans", size: 16, bold: false,
-    scale: 1.25, sel: null, draft: null, drag: null, undo: [], redo: [], dl: null, flatUser: false, key: null
+    scale: 1.25, sel: null, draft: null, drag: null, undo: [], redo: [], dl: null, key: null, redactColor: "#000000"
   };
   let editor = null;
   const $ = id => document.getElementById(id);
@@ -554,7 +581,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(111,149,192,
     });
     toolbar.appendChild(g);
   });
-  toolbar.insertAdjacentHTML("beforeend",
+  $("props").insertAdjacentHTML("beforeend",
     '<div class="grp" id="grpHint"><span class="hint" id="hintTxt"></span></div>' +
     '<div class="grp" id="grpColor"></div>' +
     '<div class="grp" id="grpWidth"><label class="ctl">Width <input type="range" id="widthIn" min="1" max="14" value="3"></label></div>' +
@@ -572,6 +599,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(111,149,192,
     b.addEventListener("click", () => setColor(c));
     $("grpColor").appendChild(b);
   });
+  $("grpColor").dataset.title = "Color"; $("grpText").dataset.title = "Text";
   $("grpColor").insertAdjacentHTML("beforeend", '<label class="ctl" title="Custom color"><input type="color" id="colorIn" value="' + COLORS[0] + '"></label>');
   $("colorIn").addEventListener("input", e => setColor(e.target.value));
   $("widthIn").addEventListener("input", e => { S.width = +e.target.value; applyToSel({ width: S.width }); });
@@ -580,7 +608,6 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(111,149,192,
   $("sizeIn").addEventListener("change", e => { S.size = +e.target.value; applyToSel({ size: S.size }, true); });
   $("boldIn").addEventListener("click", e => { S.bold = !S.bold; e.currentTarget.setAttribute("aria-pressed", S.bold); applyToSel({ bold: S.bold }, true); });
   $("delBtn").addEventListener("click", deleteSel);
-  $("flatIn").addEventListener("change", e => { S.flatUser = e.target.checked; });
 
   function setTool(t) {
     commitText();
@@ -601,7 +628,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(111,149,192,
     rect: { g: ["Color", "Width", "Fill"] }, square: { g: ["Color", "Width", "Fill"] }, ellipse: { g: ["Color", "Width", "Fill"] },
     line: { g: ["Color", "Width"] }, arrow: { g: ["Color", "Width"] },
     text: { g: ["Color", "Text", "Fill"], fill: "Background" },
-    redact: { hint: "Draw black boxes · the text underneath is removed when you save" },
+    redact: { g: ["Color"], hint: "Everything under a redaction box is permanently removed when you save. Black by default — pick any color, or white for a clean cover-up." },
     replace: { hint: "Click a line of text to replace it · drag across text to pick several words" },
     replaceSel: { g: ["Color", "Text"] }
   };
@@ -619,18 +646,23 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(111,149,192,
     else if (so) hint = "";
     $("grpHint").hidden = !hint; $("hintTxt").textContent = hint;
     $("grpDel").hidden = !so;
+    $("props").classList.toggle("only-hint", !show.size && !so);
   }
   function cursorFor(t) { return t === "select" ? "default" : t === "text" ? "text" : t === "replace" ? "default" : "crosshair"; }
-  function setColor(c) {
-    S.color = c;
-    toolbar.querySelectorAll(".swatch").forEach(b => b.setAttribute("aria-pressed", b.dataset.color === c));
+  function syncSwatches(c) {
+    document.querySelectorAll(".swatch").forEach(b => b.setAttribute("aria-pressed", b.dataset.color === c));
     $("colorIn").value = c;
+  }
+  function setColor(c) {
+    const so = S.sel && S.annos[S.sel.page] && S.annos[S.sel.page][S.sel.idx];
+    if (so ? so.redact : S.tool === "redact") S.redactColor = c; else S.color = c;
+    syncSwatches(c);
     applyToSel({ color: c });
   }
   function applyToSel(patch, textOnly) {
     if (!S.sel) return;
     const pg = S.sel.page, o = S.annos[pg][S.sel.idx];
-    if (!o || o.redact || (textOnly && o.type !== "text" && o.type !== "replace")) return;
+    if (!o || (o.redact && !(Object.keys(patch).length === 1 && "color" in patch)) || (textOnly && o.type !== "text" && o.type !== "replace")) return;
     pushHistory();
     Object.assign(o, patch);
     if (o.type === "text") { measureText(o); loadFont(o).then(() => { measureText(o); redraw(pg); }); }
@@ -821,6 +853,16 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(111,149,192,
     ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, p.ov.width, p.ov.height);
     ctx.setTransform(k, 0, 0, k, 0, 0);
     S.annos[i].forEach(o => drawObj(ctx, o));
+    S.annos[i].forEach(o => {
+      if (!o.redact) return;
+      const s1 = 1 / S.scale, b = bbox(o), ins = 3 * s1;
+      const n = parseInt(o.color.slice(1), 16), lum = (0.299 * (n >> 16 & 255) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255)) / 255;
+      ctx.save(); ctx.setLineDash([5 * s1, 4 * s1]); ctx.lineWidth = 1.2 * s1;
+      ctx.strokeStyle = lum < 0.55 ? "rgba(255,255,255,.75)" : "rgba(0,0,0,.4)";
+      if (o.type === "ellipse") { ctx.beginPath(); ctx.ellipse(b.x + b.w / 2, b.y + b.h / 2, Math.max(0, Math.abs(b.w) / 2 - ins), Math.max(0, Math.abs(b.h) / 2 - ins), 0, 0, Math.PI * 2); ctx.stroke(); }
+      else ctx.strokeRect(b.x + ins, b.y + ins, Math.max(0, b.w - 2 * ins), Math.max(0, b.h - 2 * ins));
+      ctx.restore();
+    });
     if (S.draft && S.draft.page === i) drawObj(ctx, S.draft.o);
     if (S.ghost && S.ghost.page === i) drawObj(ctx, S.ghost.o);
     if (S.tool === "replace") {
@@ -908,7 +950,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(111,149,192,
       let o;
       if (S.tool === "pen") o = { type: "pen", points: [[x, y]], ...base };
       else if (S.tool === "line" || S.tool === "arrow") o = { type: S.tool, x1: x, y1: y, x2: x, y2: y, ...base };
-      else if (S.tool === "redact") o = { type: "rect", redact: true, x, y, w: 0, h: 0, color: "#000000", width: 1, fill: "solid" };
+      else if (S.tool === "redact") o = { type: "rect", redact: true, x, y, w: 0, h: 0, color: S.redactColor, width: 1, fill: "solid" };
       else o = { type: S.tool, x, y, w: 0, h: 0, ...base };
       S.draft = { page: i, o, ox: x, oy: y };
       redraw(i);
@@ -1255,12 +1297,10 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(111,149,192,
     $("redoBtn").disabled = !S.redo.length;
     $("exportBtn").disabled = !S.pdf;
     $("splitBtn").disabled = !S.pdf;
-    const anyRedact = S.annos.some(l => l.some(o => o.redact || o.type === "replace"));
-    const fi = $("flatIn");
-    if (anyRedact) { fi.checked = true; fi.disabled = true; $("flatLbl").title = "Always on while the document has redactions or replaced text."; }
-    else if (fi.disabled) { fi.disabled = false; fi.checked = S.flatUser; $("flatLbl").title = "Turns each marked page into a single image, so anything you covered is permanently removed and can’t be copied or searched. Pages without markup stay unchanged."; }
+    $("props").hidden = !S.pdf;
     refreshContext();
     const so = S.sel && S.annos[S.sel.page] && S.annos[S.sel.page][S.sel.idx];
+    syncSwatches(so ? so.color : S.tool === "redact" ? S.redactColor : S.color);
     if (so && (so.type === "text" || so.type === "replace")) {
       $("fontIn").value = so.font || "sans";
       const sv = String(fontSize(so)), si = $("sizeIn");
@@ -1285,67 +1325,78 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(111,149,192,
 
   /* ---------- export ---------- */
   function hasForced() { return S.annos.some(l => l.some(o => o.redact || o.type === "replace")); }
-  // Returns true/false for flatten, or null if the person cancelled.
-  async function decideFlatten(verb) {
-    let flatten = $("flatIn").checked || hasForced();
-    if (!flatten && S.annos.some(l => l.some(o => o.fill === "solid" && o.type !== "text" && o.type !== "pen"))) {
-      const r = await ask("Remove the text under your solid boxes?",
-        "Solid boxes only hide text visually. Unless it’s removed, anyone can still copy or search what’s underneath.",
-        [["cancel", "Cancel"], ["keep", verb + " without removing"], ["flat", "Remove text & " + verb.toLowerCase(), true]]);
-      if (r === "cancel") return null;
-      if (r === "flat") flatten = true;
-    }
-    return flatten;
+  function needsFlatten(i) { return S.annos[i].some(o => o.redact || o.type === "replace"); }
+  function solidShapes() {
+    const out = [];
+    S.annos.forEach(l => l.forEach(o => { if (!o.redact && !o.keepShape && o.fill === "solid" && (o.type === "rect" || o.type === "square" || o.type === "ellipse")) out.push(o); }));
+    return out;
+  }
+  // Offers to turn solid shapes into redactions. Returns false if the person cancelled.
+  async function prepareSave(verb) {
+    const solids = solidShapes();
+    if (!solids.length) return true;
+    const r = await ask("Turn your solid boxes into redactions?",
+      "Solid shapes only hide text visually — anyone can still copy or search what’s underneath. Redactions remove it permanently when you " + verb.toLowerCase() + ".",
+      [["cancel", "Cancel"], ["keep", "Keep as shapes"], ["convert", "Convert to redactions", true]]);
+    if (r === "cancel") return false;
+    pushHistory();
+    solids.forEach(o => { if (r === "convert") o.redact = true; else o.keepShape = true; });
+    redrawAll(); updateButtons();
+    return true;
   }
   function loadSrc() { return PDFLib.PDFDocument.load(S.bytes.slice(0), { ignoreEncryption: true }); }
-  // Builds the PDF with markup applied, using the same rules for Save and Split.
-  async function buildMarkedDoc(flatten, progress) {
-    const src = await loadSrc();
-    let doc = src;
-    if (flatten) {
-      doc = await PDFLib.PDFDocument.create();
-      for (let i = 0; i < S.pages.length; i++) {
-        if (!S.annos[i].length) { const [cp] = await doc.copyPages(src, [i]); doc.addPage(cp); continue; }
-        if (progress) progress("Flattening page " + (i + 1) + "…");
-        const p = S.pages[i], R = 200 / 72;
-        const c = document.createElement("canvas");
-        c.width = Math.ceil(p.w * R); c.height = Math.ceil(p.h * R);
-        const cx = c.getContext("2d");
-        cx.fillStyle = "#fff"; cx.fillRect(0, 0, c.width, c.height);
-        await p.page.render({ canvasContext: cx, viewport: p.page.getViewport({ scale: R }) }).promise;
-        cx.setTransform(R, 0, 0, R, 0, 0);
-        S.annos[i].forEach(o => drawObj(cx, o));
-        const jb = await new Promise(r => c.toBlob(r, "image/jpeg", 0.92));
-        const jimg = await doc.embedJpg(await jb.arrayBuffer());
-        const pg = doc.addPage([p.w, p.h]);
-        pg.drawImage(jimg, { x: 0, y: 0, width: p.w, height: p.h });
-      }
-      return doc;
+  async function flattenPage(doc, i, progress) {
+    if (progress) progress("Flattening page " + (i + 1) + "…");
+    const p = S.pages[i], R = 200 / 72;
+    const c = document.createElement("canvas");
+    c.width = Math.ceil(p.w * R); c.height = Math.ceil(p.h * R);
+    const cx = c.getContext("2d");
+    cx.fillStyle = "#fff"; cx.fillRect(0, 0, c.width, c.height);
+    await p.page.render({ canvasContext: cx, viewport: p.page.getViewport({ scale: R }) }).promise;
+    cx.setTransform(R, 0, 0, R, 0, 0);
+    S.annos[i].forEach(o => drawObj(cx, o));
+    const jb = await new Promise(r => c.toBlob(r, "image/jpeg", 0.92));
+    const jimg = await doc.embedJpg(await jb.arrayBuffer());
+    const pg = doc.addPage([p.w, p.h]);
+    pg.drawImage(jimg, { x: 0, y: 0, width: p.w, height: p.h });
+  }
+  async function overlayPage(doc, pageIndex, i) {
+    const p = S.pages[i], K = 3;
+    const disp = document.createElement("canvas");
+    disp.width = Math.ceil(p.w * K); disp.height = Math.ceil(p.h * K);
+    const dc = disp.getContext("2d"); dc.scale(K, K);
+    S.annos[i].forEach(o => drawObj(dc, o));
+    const rot = ((p.rot % 360) + 360) % 360;
+    let out = disp;
+    if (rot) {
+      out = document.createElement("canvas");
+      const side = rot === 90 || rot === 270;
+      out.width = side ? disp.height : disp.width; out.height = side ? disp.width : disp.height;
+      const oc = out.getContext("2d"), W = out.width, H = out.height;
+      if (rot === 90) { oc.translate(0, H); oc.rotate(-Math.PI / 2); }
+      else if (rot === 180) { oc.translate(W, H); oc.rotate(Math.PI); }
+      else { oc.translate(W, 0); oc.rotate(Math.PI / 2); }
+      oc.drawImage(disp, 0, 0);
     }
-    const K = 3;
+    const blob = await new Promise(r => out.toBlob(r, "image/png"));
+    const img = await doc.embedPng(await blob.arrayBuffer());
+    const page = doc.getPage(pageIndex), box = page.getCropBox();
+    page.drawImage(img, { x: box.x, y: box.y, width: box.width, height: box.height });
+  }
+  // Builds the PDF with markup applied, using the same rules for Save and Split.
+  // Pages with redactions or replaced text are flattened; other marked pages get an overlay and keep their text.
+  async function buildMarkedDoc(progress) {
+    const src = await loadSrc();
+    if (!S.pages.some((_, i) => needsFlatten(i))) {
+      for (let i = 0; i < S.pages.length; i++) if (S.annos[i].length) await overlayPage(src, i, i);
+      return src;
+    }
+    // Rebuild into a new document so no data from flattened pages remains in the file.
+    const doc = await PDFLib.PDFDocument.create();
     for (let i = 0; i < S.pages.length; i++) {
-      if (!S.annos[i].length) continue;
-      const p = S.pages[i];
-      const disp = document.createElement("canvas");
-      disp.width = Math.ceil(p.w * K); disp.height = Math.ceil(p.h * K);
-      const dc = disp.getContext("2d"); dc.scale(K, K);
-      S.annos[i].forEach(o => drawObj(dc, o));
-      const rot = ((p.rot % 360) + 360) % 360;
-      let out = disp;
-      if (rot) {
-        out = document.createElement("canvas");
-        const side = rot === 90 || rot === 270;
-        out.width = side ? disp.height : disp.width; out.height = side ? disp.width : disp.height;
-        const oc = out.getContext("2d"), W = out.width, H = out.height;
-        if (rot === 90) { oc.translate(0, H); oc.rotate(-Math.PI / 2); }
-        else if (rot === 180) { oc.translate(W, H); oc.rotate(Math.PI); }
-        else { oc.translate(W, 0); oc.rotate(Math.PI / 2); }
-        oc.drawImage(disp, 0, 0);
-      }
-      const blob = await new Promise(r => out.toBlob(r, "image/png"));
-      const img = await doc.embedPng(await blob.arrayBuffer());
-      const page = doc.getPage(i), box = page.getCropBox();
-      page.drawImage(img, { x: box.x, y: box.y, width: box.width, height: box.height });
+      if (needsFlatten(i)) { await flattenPage(doc, i, progress); continue; }
+      const [cp] = await doc.copyPages(src, [i]); doc.addPage(cp);
+      if (S.annos[i].length) await overlayPage(doc, doc.getPageCount() - 1, i);
     }
     return doc;
   }
@@ -1365,12 +1416,11 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(111,149,192,
     commitText();
     if (!S.pdf) return;
     if (!window.PDFLib) { toast("The export tool didn’t load. Reload the page and try again."); return; }
-    const flatten = await decideFlatten("Save");
-    if (flatten === null) return;
+    if (!(await prepareSave("Save"))) return;
     const btn = $("exportBtn"); btn.disabled = true;
     toast("Creating PDF…", 60000);
     try {
-      const doc = await buildMarkedDoc(flatten, m => toast(m, 60000));
+      const doc = await buildMarkedDoc(m => toast(m, 60000));
       const bytes = await doc.save();
       await saveBlob(S.name.replace(/\.pdf$/i, "") + "-marked.pdf", new Blob([bytes], { type: "application/pdf" }));
     } catch (err) {
@@ -1563,13 +1613,12 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(111,149,192,
     try { groups = computeGroups(); } catch (e) { $("spErr").textContent = e; return; }
     if (!window.PDFLib) { $("spErr").textContent = "The PDF tools didn’t load. Reload the page and try again."; return; }
     const marked = spSrc() === "marked" || hasForced();
-    let flatten = false;
-    if (marked && S.annos.some(l => l.length)) { flatten = await decideFlatten("Split"); if (flatten === null) return; }
+    if (marked && S.annos.some(l => l.length) && !(await prepareSave("Split"))) return;
     SP.busy = true; $("spGo").disabled = true; clearSplitResults();
     const say = m => { $("spSummary").textContent = m; };
     try {
       say("Preparing pages…");
-      const doc = marked && S.annos.some(l => l.length) ? await buildMarkedDoc(flatten, say) : await loadSrc();
+      const doc = marked && S.annos.some(l => l.length) ? await buildMarkedDoc(say) : await loadSrc();
       const base = S.name.replace(/\.pdf$/i, "") || "document", pad = String(groups.length).length, mode = spMode();
       for (let i = 0; i < groups.length; i++) {
         say("Creating file " + (i + 1) + " of " + groups.length + "…");
