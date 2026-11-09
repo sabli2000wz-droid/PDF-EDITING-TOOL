@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>PDF Markup</title>
+<meta name="description" content="Draw on PDFs, replace text, redact sensitive content and split documents — entirely in your browser.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%96%8D%EF%B8%8F%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@400;700&family=LXGW+WenKai+TC:wght@400;700&family=Noto+Sans+Mono:wght@400;700&family=Arimo:wght@400;700&family=Tinos:wght@400;700&family=Carlito:wght@400;700&family=Caladea:wght@400;700&family=Gelasio:wght@400;700&family=Cousine:wght@400;700&family=Roboto:wght@400;700&family=Open+Sans:wght@400;700&family=Lato:wght@400;700&family=Montserrat:wght@400;700&family=Merriweather:wght@400;700&family=Playfair+Display:wght@400;700&family=Caveat:wght@400;700&display=swap" rel="stylesheet">
@@ -546,11 +548,6 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(111,149,192,
   const TOOLS = TOOL_GROUPS.flat();
   const SANS_CJK = '"Noto Sans TC", sans-serif', SERIF_CJK = '"Noto Serif TC", serif';
   const FONT_LIST = [
-    ["Chinese", [
-      ["sans", "黑體 Noto Sans TC", '"Noto Sans TC", "Inter", sans-serif'],
-      ["serif", "明體 Noto Serif TC", '"Noto Serif TC", Georgia, serif'],
-      ["hand", "楷體 LXGW WenKai", '"LXGW WenKai TC", "Noto Sans TC", cursive']
-    ]],
     ["Office look-alikes", [
       ["arimo", "Arial / Helvetica", '"Arimo", Arial, Helvetica, ' + SANS_CJK],
       ["tinos", "Times New Roman", '"Tinos", "Times New Roman", ' + SERIF_CJK],
@@ -570,6 +567,11 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(111,149,192,
       ["merriweather", "Merriweather", '"Merriweather", ' + SERIF_CJK],
       ["playfair", "Playfair Display", '"Playfair Display", ' + SERIF_CJK],
       ["caveat", "Caveat (handwriting)", '"Caveat", "LXGW WenKai TC", cursive']
+    ]],
+    ["Chinese", [
+      ["sans", "黑體 Noto Sans TC", '"Noto Sans TC", "Inter", sans-serif'],
+      ["serif", "明體 Noto Serif TC", '"Noto Serif TC", Georgia, serif'],
+      ["hand", "楷體 LXGW WenKai", '"LXGW WenKai TC", "Noto Sans TC", cursive']
     ]]
   ];
   const FONT_OPTS = FONT_LIST.map(([g, fs]) => '<optgroup label="' + g + '">' + fs.map(f => '<option value="' + f[0] + '">' + f[1] + '</option>').join('') + '</optgroup>').join('');
@@ -577,8 +579,8 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(111,149,192,
 
   const S = {
     pdf: null, bytes: null, name: "", pages: [], annos: [],
-    tool: "rect", color: COLORS[0], width: 3, fill: false, font: "sans", size: 16, bold: false,
-    scale: 1.25, sel: null, draft: null, drag: null, undo: [], redo: [], dl: null, key: null, redactColor: "#000000"
+    tool: "rect", color: COLORS[0], width: 3, fill: false, font: "arimo", size: 16, bold: false,
+    scale: 1.25, sel: null, draft: null, drag: null, undo: [], redo: [], key: null, redactColor: "#000000"
   };
   let editor = null;
   const $ = id => document.getElementById(id);
@@ -1170,7 +1172,8 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(111,149,192,
     const w = Math.max(...items.map(b => b.x + b.w)) - x, h = Math.max(...items.map(b => b.y + b.h)) - y;
     const fh = Math.round(Math.max(...sorted.map(b => b.fh)) * 2) / 2;
     const first = sorted[0];
-    const { font, bold } = guessFont(first);
+    let { font, bold } = guessFont(first);
+    if (!/[\u3000-\u9fff\uac00-\ud7af\uff00-\uffef]/.test(text)) font = font === "sans" ? "arimo" : font === "serif" ? "tinos" : font === "hand" ? "caveat" : font;
     const { bg, fg } = sampleColors(i, { x, y, w, h });
     const o = { type: "replace", x, y, w, h, bg, tx: x, ty: first.base - fh * 0.88, text, color: fg, size: fh, font, bold, width: S.width, fill: false };
     S.hover = null;
@@ -1419,18 +1422,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(111,149,192,
     }
     return doc;
   }
-  async function saveBlob(filename, blob) {
-    if (S.dl) {
-      try { await S.dl.save({ filename, data: blob }); toast("Saved " + filename); return true; }
-      catch (err) {
-        const code = err && err.code;
-        if (code === "declined") { toast("Save canceled"); return false; }
-        if (code === "rate_limited") { toast("A save dialog is already open."); return false; }
-        if (code === "too_large") { toast("That file is too large to save here. Try downloading files one at a time."); return false; }
-      }
-    }
-    fallbackDownload(blob, filename); return true;
-  }
+  async function saveBlob(filename, blob) { fallbackDownload(blob, filename); return true; }
   async function exportPdf() {
     commitText();
     if (!S.pdf) return;
@@ -1688,9 +1680,6 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(111,149,192,
     clearTimeout(tt); tt = setTimeout(() => t.classList.remove("show"), ms || 2600);
   }
 
-  if (window.claude && typeof window.claude.use === "function") {
-    window.claude.use("downloads").then(d => { S.dl = d; }).catch(() => {});
-  }
   updateButtons();
 })();
 </script>
