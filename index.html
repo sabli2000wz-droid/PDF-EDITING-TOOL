@@ -377,7 +377,13 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(111,149,192,
 .props .ctl input[type=range] { width: 100%; margin: 6px 0; }
 .props #boldIn { align-self: flex-start; }
 .props .hint { white-space: normal; line-height: 1.55; font-size: 13px; }
-#grpDel .btn { width: 100%; justify-content: center; }
+#grpDel .btn, #grpReset .btn { width: 100%; justify-content: center; }
+.bg-row { display: flex; align-items: center; gap: 10px; }
+.bg-hex { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 13px; color: var(--ink); letter-spacing: .02em; }
+.picker.bgpick { background: var(--cur, #fff); }
+.picker.bgpick .pk-dot { display: none; }
+.bg-acts { display: flex; gap: 8px; }
+.bg-acts .btn { flex: 1; height: 32px; padding: 0 10px; font-size: 12.5px; justify-content: center; }
 :root { --swatch-edge: rgba(29,51,80,.28); }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --swatch-edge: rgba(255,255,255,.3); } }
 :root[data-theme="dark"] { --swatch-edge: rgba(255,255,255,.3); }
@@ -579,7 +585,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(111,149,192,
 
   const S = {
     pdf: null, bytes: null, name: "", pages: [], annos: [],
-    tool: "rect", color: COLORS[0], width: 3, fill: false, font: "arimo", size: 16, bold: false,
+    tool: "rect", color: COLORS[0], width: 3, fill: false, font: "arimo", size: 16, bold: false, opacity: false,
     scale: 1.25, sel: null, draft: null, drag: null, undo: [], redo: [], key: null, redactColor: "#000000"
   };
   let editor = null;
@@ -604,27 +610,69 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(111,149,192,
     '<div class="grp" id="grpColor"></div>' +
     '<div class="grp" id="grpWidth"><label class="ctl">Width <input type="range" id="widthIn" min="1" max="14" value="3"></label></div>' +
     '<div class="grp" id="grpFill"><label class="ctl"><span id="fillLbl">Fill</span> <select id="fillIn"><option value="">None</option><option value="half">Translucent</option><option value="solid">Solid</option></select></label></div>' +
+    '<div class="grp" id="grpOpacity"><label class="ctl">Line opacity <select id="opIn"><option value="">Solid</option><option value="half">Translucent</option></select></label></div>' +
+    '<div class="grp" id="grpBg"><div class="bg-row"><label class="picker bgpick" id="bgPick" title="Background color"><input type="color" id="bgIn" aria-label="Background color" value="#ffffff"><span class="pk-dot"></span></label><span class="bg-hex" id="bgHex">#FFFFFF</span></div><div class="bg-acts"><button class="btn" type="button" id="bgWhite">White</button><button class="btn" type="button" id="bgDetect">Match page</button></div></div>' +
     '<div class="grp" id="grpText">' +
       '<label class="ctl">Font <select id="fontIn">' + FONT_OPTS + '</select></label>' +
       '<label class="ctl">Size <select id="sizeIn">' + [8, 10, 12, 14, 16, 18, 20, 24, 28, 32, 40, 48, 64, 72].map(n => '<option' + (n === 16 ? ' selected' : '') + '>' + n + '</option>').join('') + '</select></label>' +
       '<button class="btn icon" type="button" id="boldIn" aria-pressed="false" title="Bold" aria-label="Bold">B</button>' +
     '</div>' +
+    '<div class="grp" id="grpReset"><button class="btn" type="button" id="resetBtn">Reset to detected style</button></div>' +
     '<div class="grp" id="grpDel"><button class="btn" type="button" id="delBtn"><span>Delete</span></button></div>');
   COLORS.forEach(c => {
     const b = document.createElement("button");
     b.type = "button"; b.className = "swatch"; b.style.background = c; b.dataset.color = c;
     b.setAttribute("aria-label", "Color " + c);
-    b.addEventListener("click", () => setColor(c));
+    b.addEventListener("click", () => { setColor(c); refocusEditor(); });
     $("grpColor").appendChild(b);
   });
-  $("grpColor").dataset.title = "Color"; $("grpText").dataset.title = "Text";
+  $("grpColor").dataset.title = "Color"; $("grpText").dataset.title = "Text"; $("grpBg").dataset.title = "Background";
   $("grpColor").insertAdjacentHTML("beforeend", '<label class="picker" id="picker" title="Pick a custom color"><input type="color" id="colorIn" aria-label="Pick a custom color" value="' + COLORS[0] + '"><span class="pk-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 7 3 3"/><path d="M15.5 4.5a2.1 2.1 0 0 1 3 3L9 17l-4 1 1-4z"/></svg></span></label>');
   $("colorIn").addEventListener("input", e => setColor(e.target.value));
-  $("widthIn").addEventListener("input", e => { S.width = +e.target.value; applyToSel({ width: S.width }); });
-  $("fillIn").addEventListener("change", e => { S.fill = e.target.value || false; applyToSel({ fill: S.fill }); });
-  $("fontIn").addEventListener("change", e => { S.font = e.target.value; applyToSel({ font: S.font }, true); });
-  $("sizeIn").addEventListener("change", e => { S.size = +e.target.value; applyToSel({ size: S.size }, true); });
-  $("boldIn").addEventListener("click", e => { S.bold = !S.bold; e.currentTarget.setAttribute("aria-pressed", S.bold); applyToSel({ bold: S.bold }, true); });
+  // Applies a style change to the text being edited, or else to the defaults and the selection.
+  function setStyle(key, val, textOnly) {
+    const patch = { [key]: val };
+    if (editor) {
+      if (editor.o.type === "text") S[key] = val;
+      applyToEditor(patch);
+      return;
+    }
+    S[key] = val;
+    applyToSel(patch, textOnly);
+    syncControls();
+  }
+  $("widthIn").addEventListener("input", e => setStyle("width", +e.target.value));
+  $("fillIn").addEventListener("change", e => { setStyle("fill", e.target.value || false); refocusEditor(); });
+  $("opIn").addEventListener("change", e => setStyle("opacity", e.target.value || false));
+  $("fontIn").addEventListener("change", e => { setStyle("font", e.target.value, true); refocusEditor(); });
+  $("sizeIn").addEventListener("change", e => { setStyle("size", +e.target.value, true); refocusEditor(); });
+  $("boldIn").addEventListener("click", () => { const o = curObj(); setStyle("bold", !(o && (o.type === "text" || o.type === "replace") ? o.bold : S.bold), true); refocusEditor(); });
+  $("bgIn").addEventListener("input", e => setBg(e.target.value));
+  $("bgWhite").addEventListener("click", () => { setBg("#ffffff"); refocusEditor(); });
+  $("bgDetect").addEventListener("click", () => {
+    const o = curObj(); if (!o || o.type !== "replace") return;
+    const pg = editor ? editor.page : S.sel.page;
+    setBg(sampleColors(pg, { x: o.x, y: o.y, w: o.w, h: o.h }).bg); refocusEditor();
+  });
+  $("resetBtn").addEventListener("click", () => {
+    const o = curObj(); if (!o || !o.detected) return;
+    const d = o.detected, patch = { color: d.color, bg: d.bg, font: d.font, size: d.size, bold: d.bold };
+    if (editor) applyToEditor(patch); else applyToSel(patch, true);
+    syncControls(); refocusEditor();
+  });
+  function setBg(c) {
+    const o = curObj(); if (!o || o.type !== "replace") return;
+    if (editor) applyToEditor({ bg: c }); else applyToSel({ bg: c }, true);
+    syncControls();
+  }
+  // Keep the text box open while using the sidebar.
+  let propsDown = false;
+  $("props").addEventListener("pointerdown", e => {
+    propsDown = true;
+    if (editor && e.target.closest("button")) e.preventDefault();
+  });
+  window.addEventListener("pointerup", () => setTimeout(() => { propsDown = false; }, 0));
+  function refocusEditor() { if (editor) setTimeout(() => editor && editor.ta.focus({ preventScroll: true }), 0); }
   $("delBtn").addEventListener("click", deleteSel);
 
   function setTool(t) {
@@ -642,29 +690,37 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(111,149,192,
   const CTX = {
     hand: { hint: "Drag the page to scroll" },
     select: { hint: "Click a markup to select it · double-click text to edit" },
-    pen: { g: ["Color", "Width", "Fill"], fill: "Highlighter" },
-    rect: { g: ["Color", "Width", "Fill"] }, square: { g: ["Color", "Width", "Fill"] }, ellipse: { g: ["Color", "Width", "Fill"] },
-    line: { g: ["Color", "Width"] }, arrow: { g: ["Color", "Width"] },
+    pen: { g: ["Color", "Width", "Opacity"], op: "Opacity" },
+    rect: { g: ["Color", "Width", "Fill", "Opacity"] }, square: { g: ["Color", "Width", "Fill", "Opacity"] }, ellipse: { g: ["Color", "Width", "Fill", "Opacity"] },
+    line: { g: ["Color", "Width", "Opacity"], op: "Opacity" }, arrow: { g: ["Color", "Width", "Opacity"], op: "Opacity" },
     text: { g: ["Color", "Text", "Fill"], fill: "Background" },
     redact: { g: ["Color"], hint: "Everything under a redaction box is permanently removed when you save. Black by default — pick any color, or white for a clean cover-up." },
     replace: { hint: "Click a line of text to replace it · drag across text to pick several words" },
-    replaceSel: { g: ["Color", "Text"] }
+    replaceSel: { g: ["Color", "Bg", "Text", "Reset"] }
   };
+  function selObj() { return (S.sel && S.annos[S.sel.page] && S.annos[S.sel.page][S.sel.idx]) || null; }
+  function curObj() { return editor ? editor.o : selObj(); }
   function refreshContext() {
-    const so = S.sel && S.annos[S.sel.page] && S.annos[S.sel.page][S.sel.idx];
+    const so = selObj(), eo = editor && editor.o, o = eo || so;
     let key = S.tool;
-    if (so) key = so.redact ? "redact" : so.type === "replace" ? "replaceSel" : so.type;
+    if (eo) key = eo.type === "replace" ? "replaceSel" : "text";
+    else if (so) key = so.redact ? "redact" : so.type === "replace" ? "replaceSel" : so.type;
     const c = CTX[key] || {};
     const show = new Set(c.g || []);
-    ["Color", "Width", "Fill", "Text"].forEach(n => $("grp" + n).hidden = !show.has(n));
+    if (!(o && o.detected)) show.delete("Reset");
+    ["Color", "Width", "Fill", "Opacity", "Text", "Bg", "Reset"].forEach(n => $("grp" + n).hidden = !show.has(n));
     $("fillLbl").textContent = c.fill || "Fill";
+    $("grpOpacity").querySelector(".ctl").firstChild.nodeValue = (c.op || "Line opacity") + " ";
+    $("grpColor").dataset.title = key === "replaceSel" || key === "text" ? "Text color" : key === "redact" ? "Box color" : "Color";
     let hint = c.hint || "";
-    if (so && so.redact) hint = "Redaction box · removed text can’t be recovered after saving";
+    if (eo && eo.type === "replace") hint = "Adjust the style while you type. Enter to finish, Esc to cancel.";
+    else if (eo) hint = "Enter to finish · Shift + Enter for a new line";
+    else if (so && so.redact) hint = "Redaction box · removed text can’t be recovered after saving";
     else if (so && so.type === "replace") hint = "Double-click to edit the new text";
     else if (so) hint = "";
     $("grpHint").hidden = !hint; $("hintTxt").textContent = hint;
-    $("grpDel").hidden = !so;
-    $("props").classList.toggle("only-hint", !show.size && !so);
+    $("grpDel").hidden = !so || !!eo;
+    $("props").classList.toggle("only-hint", !show.size && !so && !eo);
   }
   function cursorFor(t) { return t === "select" ? "default" : t === "text" ? "text" : t === "replace" ? "default" : "crosshair"; }
   function syncSwatches(c) {
@@ -675,6 +731,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(111,149,192,
     $("picker").style.setProperty("--cur", custom ? c : "#ffffff");
   }
   function setColor(c) {
+    if (editor) { if (editor.o.type === "text") S.color = c; applyToEditor({ color: c }); return; }
     const so = S.sel && S.annos[S.sel.page] && S.annos[S.sel.page][S.sel.idx];
     if (so ? so.redact : S.tool === "redact") S.redactColor = c; else S.color = c;
     syncSwatches(c);
@@ -686,7 +743,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(111,149,192,
     if (!o || (o.redact && !(Object.keys(patch).length === 1 && "color" in patch)) || (textOnly && o.type !== "text" && o.type !== "replace")) return;
     pushHistory();
     Object.assign(o, patch);
-    if (o.type === "text") { measureText(o); loadFont(o).then(() => { measureText(o); redraw(pg); }); }
+    if (o.type === "text" || o.type === "replace") { measureText(o); loadFont(o).then(() => { measureText(o); redraw(pg); }); }
     redraw(pg);
     scheduleSave();
   }
@@ -803,25 +860,26 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(111,149,192,
   function drawObj(ctx, o) {
     ctx.strokeStyle = o.color; ctx.fillStyle = o.fill ? rgba(o.color, o.fill === "solid" ? 1 : 0.25) : o.color;
     ctx.lineWidth = o.width; ctx.lineCap = "round"; ctx.lineJoin = "round";
+    const strokeA = o.opacity === "half" ? 0.45 : 1;
     switch (o.type) {
       case "rect": case "square":
         if (o.fill) ctx.fillRect(o.x, o.y, o.w, o.h);
-        ctx.strokeRect(o.x, o.y, o.w, o.h); break;
+        ctx.globalAlpha = strokeA; ctx.strokeRect(o.x, o.y, o.w, o.h); ctx.globalAlpha = 1; break;
       case "ellipse":
         ctx.beginPath();
         ctx.ellipse(o.x + o.w / 2, o.y + o.h / 2, Math.abs(o.w / 2), Math.abs(o.h / 2), 0, 0, Math.PI * 2);
         if (o.fill) ctx.fill();
-        ctx.stroke(); break;
+        ctx.globalAlpha = strokeA; ctx.stroke(); ctx.globalAlpha = 1; break;
       case "line": case "arrow":
-        ctx.beginPath(); ctx.moveTo(o.x1, o.y1); ctx.lineTo(o.x2, o.y2); ctx.stroke();
+        // Shaft and head form one path, so translucent arrows don't darken where they meet.
+        ctx.beginPath(); ctx.moveTo(o.x1, o.y1); ctx.lineTo(o.x2, o.y2);
         if (o.type === "arrow") {
           const a = Math.atan2(o.y2 - o.y1, o.x2 - o.x1), L = Math.max(10, o.width * 4);
-          ctx.beginPath();
           ctx.moveTo(o.x2 - L * Math.cos(a - 0.45), o.y2 - L * Math.sin(a - 0.45));
           ctx.lineTo(o.x2, o.y2);
           ctx.lineTo(o.x2 - L * Math.cos(a + 0.45), o.y2 - L * Math.sin(a + 0.45));
-          ctx.stroke();
         }
+        ctx.globalAlpha = strokeA; ctx.stroke(); ctx.globalAlpha = 1;
         break;
       case "pen": {
         const pts = o.points;
@@ -832,7 +890,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(111,149,192,
           ctx.quadraticCurveTo(pts[i][0], pts[i][1], mx, my);
         }
         if (pts.length > 1) ctx.lineTo(pts[pts.length - 1][0], pts[pts.length - 1][1]);
-        ctx.globalAlpha = o.fill && o.fill !== "solid" ? 0.35 : 1;
+        ctx.globalAlpha = o.opacity === "half" || (!o.opacity && o.fill && o.fill !== "solid") ? 0.35 : 1;
         ctx.stroke(); ctx.globalAlpha = 1; break;
       }
       case "text": {
@@ -952,7 +1010,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(111,149,192,
       }
       commitText();
       ov.setPointerCapture(e.pointerId);
-      const base = { color: S.color, width: S.width, fill: S.fill };
+      const base = { color: S.color, width: S.width, fill: S.tool === "pen" ? false : S.fill, opacity: S.opacity || false };
       if (S.tool === "select") {
         if (S.sel && S.sel.page === i) {
           const o = S.annos[i][S.sel.idx], hs = 10 / S.scale;
@@ -1175,7 +1233,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(111,149,192,
     let { font, bold } = guessFont(first);
     if (!/[\u3000-\u9fff\uac00-\ud7af\uff00-\uffef]/.test(text)) font = font === "sans" ? "arimo" : font === "serif" ? "tinos" : font === "hand" ? "caveat" : font;
     const { bg, fg } = sampleColors(i, { x, y, w, h });
-    const o = { type: "replace", x, y, w, h, bg, tx: x, ty: first.base - fh * 0.88, text, color: fg, size: fh, font, bold, width: S.width, fill: false };
+    const o = { type: "replace", x, y, w, h, bg, tx: x, ty: first.base - fh * 0.88, text, color: fg, size: fh, font, bold, width: S.width, fill: false, detected: { color: fg, bg, font, size: fh, bold } };
     S.hover = null;
     openTextEditor(i, x, y, null, o);
   }
@@ -1215,11 +1273,31 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(111,149,192,
       if (e.key === "Escape") { cancelText(); }
       else if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); commitText(); }
     });
-    ta.addEventListener("blur", () => setTimeout(commitText, 0));
+    ta.addEventListener("blur", e => {
+      if (propsDown || (e.relatedTarget && $("props").contains(e.relatedTarget))) return;
+      setTimeout(() => { if (editor && editor.ta === ta && !$("props").contains(document.activeElement)) commitText(); }, 0);
+    });
     p.wrap.appendChild(ta);
     if (editing || preset) grow();
-    editor = { ta, page: i, o, editing, idx };
+    editor = { ta, page: i, o, editing, idx, grow, orig: JSON.stringify(o) };
+    updateButtons();
     setTimeout(() => { ta.focus(); if (editing || preset) ta.select(); }, 0);
+  }
+  function applyToEditor(patch) {
+    if (!editor) return;
+    const { ta, o, page } = editor;
+    if ("bg" in patch && o.type !== "replace") delete patch.bg;
+    Object.assign(o, patch);
+    const isRep = o.type === "replace", fs = fontSize(o) * S.scale;
+    Object.assign(ta.style, {
+      fontSize: fs + "px", fontFamily: FONTS[o.font || "sans"], fontWeight: o.bold ? "700" : "400",
+      color: o.color === "#ffffff" && !isRep ? "#1d232c" : o.color,
+      top: ((isRep ? o.ty : o.y) * S.scale - fs * 0.15 - 1) + "px"
+    });
+    if (isRep) { ta.style.background = o.bg; if (S.ghost) { S.ghost.o.bg = o.bg; redraw(page); } }
+    loadFont(o).then(() => editor && editor.grow());
+    editor.grow();
+    syncControls();
   }
   function commitText() {
     if (!editor) return;
@@ -1238,9 +1316,9 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(111,149,192,
   }
   function cancelText() {
     if (!editor) return;
-    const { ta, page, o, editing, idx } = editor; editor = null;
+    const { ta, page, editing, idx, orig } = editor; editor = null;
     ta.remove(); S.ghost = null;
-    if (editing) { S.annos[page].splice(idx, 0, o); S.undo.pop(); }
+    if (editing) { S.annos[page].splice(idx, 0, JSON.parse(orig)); S.undo.pop(); }
     redraw(page); updateButtons();
   }
 
@@ -1321,14 +1399,23 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(111,149,192,
     $("splitBtn").disabled = !S.pdf;
     $("props").hidden = !S.pdf;
     refreshContext();
-    const so = S.sel && S.annos[S.sel.page] && S.annos[S.sel.page][S.sel.idx];
-    syncSwatches(so ? so.color : S.tool === "redact" ? S.redactColor : S.color);
-    if (so && (so.type === "text" || so.type === "replace")) {
-      $("fontIn").value = so.font || "sans";
-      const sv = String(fontSize(so)), si = $("sizeIn");
-      if (![...si.options].some(op => op.value === sv)) { const op = document.createElement("option"); op.textContent = sv; si.appendChild(op); [...si.options].sort((a, b) => a.value - b.value).forEach(op => si.appendChild(op)); }
-      si.value = sv;
-      $("boldIn").setAttribute("aria-pressed", !!so.bold);
+    syncControls();
+  }
+  function syncControls() {
+    const o = curObj();
+    syncSwatches(o ? o.color : S.tool === "redact" ? S.redactColor : S.color);
+    const fill = o ? o.fill : S.fill;
+    $("fillIn").value = fill === true ? "half" : (fill || "");
+    $("widthIn").value = o && o.width ? o.width : S.width;
+    $("opIn").value = o ? (o.opacity || (o.type === "pen" && o.fill && o.fill !== "solid" ? "half" : "")) : (S.opacity || "");
+    const t = o && (o.type === "text" || o.type === "replace") ? o : { font: S.font, size: S.size, bold: S.bold, width: S.width };
+    $("fontIn").value = t.font || "sans";
+    const sv = String(fontSize(t)), si = $("sizeIn");
+    if (![...si.options].some(op => op.value === sv)) { const op = document.createElement("option"); op.textContent = sv; si.appendChild(op); [...si.options].sort((a, b) => a.value - b.value).forEach(op => si.appendChild(op)); }
+    si.value = sv;
+    $("boldIn").setAttribute("aria-pressed", !!t.bold);
+    if (o && o.type === "replace") {
+      $("bgIn").value = o.bg; $("bgPick").style.setProperty("--cur", o.bg); $("bgHex").textContent = o.bg.toUpperCase();
     }
   }
 
