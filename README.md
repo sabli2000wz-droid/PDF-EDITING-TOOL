@@ -12,7 +12,7 @@ A single-file, in-browser tool for drawing on PDFs, replacing text, redacting se
 
 ### Text
 - **Text tool:** add text anywhere, with 17 fonts, sizes from 8 to 72 pt and bold
-- **Replace tool:** click a line of existing PDF text (or drag across several words) to replace it. The tool reads the original position and size from the PDF, samples the background and text colors from the page, and picks the closest matching font automatically
+- **Replace tool:** click a line of existing PDF text (or drag across several words) to replace it. The tool reads the original position and size from the PDF, samples the background and text colors from the page, and picks the closest matching font automatically (Latin text is always matched to a Latin font)
 - Leave the replacement empty to erase the original text
 
 ### Redaction
@@ -39,7 +39,16 @@ A single-file, in-browser tool for drawing on PDFs, replacing text, redacting se
 3. Pick a tool from the toolbar, adjust it in the left sidebar, and draw on the page.
 4. Click **Save PDF** to download the marked-up copy (saved as `<name>-marked.pdf`), or **Split** to break it into several files.
 
-An internet connection is needed the first time so the page can load its libraries and fonts from CDNs.
+An internet connection is needed so the page can load its libraries and fonts from CDNs.
+
+## Hosting
+
+The app is a single static file with no server-side code, so you can:
+
+- **Open it directly** from your computer by double-clicking `pdf-markup.html`
+- **Host it** on any static host such as GitHub Pages, Netlify, Cloudflare Pages or an S3 bucket. Rename it to `index.html` if you want it served at the site root
+
+Files are saved through your browser's normal download flow.
 
 ## Keyboard shortcuts
 
@@ -79,10 +88,12 @@ When any page is flattened, the output is assembled into a brand-new document, s
 
 | Group | Fonts |
 | --- | --- |
-| Chinese | Noto Sans TC (黑體), Noto Serif TC (明體), LXGW WenKai TC (楷體) |
 | Office look-alikes | Arial / Helvetica (Arimo), Times New Roman (Tinos), Calibri (Carlito), Cambria (Caladea), Georgia (Gelasio), Courier New (Cousine) |
 | Modern | Roboto, Open Sans, Lato, Montserrat, Noto Sans Mono |
 | Display & handwriting | Merriweather, Playfair Display, Caveat |
+| Chinese | Noto Sans TC (黑體), Noto Serif TC (明體), LXGW WenKai TC (楷體) |
+
+New text uses Arial / Helvetica (Arimo) by default.
 
 The Office look-alikes are metric-compatible open fonts: each character has the same width as the original, so replaced text lines up with the surrounding layout. When a Latin font is selected, Chinese characters fall back to a matching Chinese font. The interface itself uses Nunito.
 
