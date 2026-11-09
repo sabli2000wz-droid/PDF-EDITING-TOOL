@@ -7,12 +7,16 @@ A single-file, in-browser tool for drawing on PDFs, replacing text, redacting se
 ### Markup
 - **Shapes:** rectangle, square, ellipse, line, arrow and freehand pen
 - **Styling:** 8 preset colors plus a rainbow custom-color picker, adjustable stroke width, and three fill modes (none, translucent, solid)
-- **Highlighter:** use the pen with a translucent fill
+- **Line opacity:** lines, arrows, pen strokes and shape outlines can be solid or translucent. Translucent arrows are drawn as a single stroke, so they don't darken where the head meets the shaft
+- **Highlighter:** use the pen with translucent opacity
 - **Editing:** select, move, resize (bottom-right handle) and delete any markup; full undo and redo
 
 ### Text
 - **Text tool:** add text anywhere, with 17 fonts, sizes from 8 to 72 pt and bold
 - **Replace tool:** click a line of existing PDF text (or drag across several words) to replace it. The tool reads the original position and size from the PDF, samples the background and text colors from the page, and picks the closest matching font automatically (Latin text is always matched to a Latin font)
+- **Live styling:** while you type, the sidebar shows the detected text color, background color, font, size and bold. Change any of them and the text box updates instantly, without closing
+- **Background control:** set the cover color yourself, switch to white, or use **Match page** to sample it again
+- **Reset to detected style:** undo your style changes in one click
 - Leave the replacement empty to erase the original text
 
 ### Redaction
