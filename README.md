@@ -1,6 +1,6 @@
 # PDF Markup
 
-A single-file, in-browser tool for drawing on PDFs, replacing text, redacting sensitive content and splitting documents. Everything runs locally in your browser — your files are never uploaded.
+A single-file, in-browser tool for drawing on PDFs, replacing text, redacting sensitive content and splitting documents. Everything runs locally in your browser — your files are never uploaded to anywhere.
 
 ## Features
 
